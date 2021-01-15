@@ -64,7 +64,7 @@ struct Flip {
   ChessPiece result;
 
   Flip() = default;
-  Flip(uint8_t p) : pos(p) {}
+  Flip(uint8_t p) : pos(p), result(COVERED_PIECE) {}
   Flip(uint8_t p, ChessPiece r) : pos(p), result(r) {}
 };
 
@@ -108,7 +108,7 @@ class ChessBoard {
   ChessBoard(const ChessBoard &board) = delete;
 
   std::vector<ChessMove> ListMoves(ChessColor player);
-  void MakeMove(const ChessMove &mv, BoardUpdater *history = nullptr);
+  void MakeMove(const ChessMove &mv, BoardUpdater *updater = nullptr);
 
   constexpr uint32_t GetCoveredSquares() const { return covered_squares_; }
 

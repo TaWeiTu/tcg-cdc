@@ -100,7 +100,7 @@ void ChessBoard::MakeMove(const ChessMove &mv, BoardUpdater *updater) {
   assert(current_player_ != UNKNOWN || std::holds_alternative<Flip>(mv));
   if (updater) updater->SaveMove(mv);
   if (std::holds_alternative<Flip>(mv)) {
-    auto &v = std::get<Flip>(mv);
+    const auto &v = std::get<Flip>(mv);
     assert(board_[v.pos] == COVERED_PIECE);
     assert(covered_[v.result] > 0);
 
@@ -116,7 +116,7 @@ void ChessBoard::MakeMove(const ChessMove &mv, BoardUpdater *updater) {
     num_covered_pieces_[GetChessPieceColor(v.result)]--;
     covered_squares_ ^= (1U << v.pos);
   } else {
-    auto &v = std::get<Move>(mv);
+    const auto &v = std::get<Move>(mv);
     assert(board_[v.src] != COVERED_PIECE && board_[v.src] != NO_PIECE);
     assert(board_[v.dst] != COVERED_PIECE);
     assert(CanCapture(board_[v.src], board_[v.dst]));
