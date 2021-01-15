@@ -73,8 +73,10 @@ class ChessBoard {
   static constexpr size_t kNumCells = 32;
   std::array<ChessPiece, kNumCells> board_;
   std::array<uint8_t, kNumChessPieces * 2> covered_;
+  std::array<uint8_t, 2> num_covered_pieces_;
+  std::array<uint8_t, 2> num_pieces_left_;
+  std::array<uint32_t, 2> uncovered_squares_;
   uint32_t covered_squares_;
-  uint32_t non_covered_squares_;
   ChessColor current_player_;
 
   using uint128_t = unsigned __int128;
@@ -86,10 +88,16 @@ class ChessBoard {
 
  public:
   explicit ChessBoard();
-  std::vector<ChessMove> ListMoves();
+  std::vector<ChessMove> ListMoves(ChessColor player);
   void MakeMove(const ChessMove &mv);
 
   constexpr uint32_t GetCoveredSquares() const { return covered_squares_; }
+
+  constexpr uint8_t GetNumCoveredPieces(ChessColor c) const {
+    return num_covered_pieces_[c];
+  }
+
+  constexpr bool Terminate() const;
 };
 
 #endif  // CHESS_H_

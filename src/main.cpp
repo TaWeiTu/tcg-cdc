@@ -30,7 +30,7 @@ int ParseInt(std::string_view &cmd) {
 
 std::string_view ParseString(std::string_view &cmd) {
   size_t ptr = 0;
-  while (ptr < cmd.size() && std::isalpha(cmd[ptr])) ptr++;
+  while (ptr < cmd.size() && cmd[ptr] != ' ') ptr++;
   std::string_view res = cmd.substr(0, ptr);
   cmd = Forward(cmd, ptr);
   return res;
@@ -90,7 +90,7 @@ constexpr char kCmdString[18][20] = {
     "boardsize",         "reset_board",   "num_repetition",
     "num_moves_to_draw", "move",          "flip",
     "genmove",           "game_over",     "ready",
-    "time_settings",     "time_left",     "showboard"};
+    "time_setting",     "time_left",     "showboard"};
 
 #endif
 
@@ -101,6 +101,7 @@ int main() {
   Agent agent;
   while (true) {
     std::getline(std::cin, buffer);
+    std::cerr << "received: " << buffer << "\n";
     std::string_view cmd = buffer;
     int id = ParseInt(cmd);
     auto s = ParseString(cmd);
@@ -131,6 +132,7 @@ int main() {
         ChessPiece result = ParsePiece(cmd);
         agent.OpponentFlip(pos, result);
         std::cout << "=11" << std::endl;
+        break;
       }
       case 12: {
         auto s = ParseString(cmd);
@@ -143,6 +145,8 @@ int main() {
         }
         auto mv = agent.GenerateMove();
         std::cout << "=12 " << mv << std::endl;
+        std::cerr << "Generate move " << mv << std::endl;
+        break;
       }
       case 14:
         std::cout << "=14" << std::endl;
@@ -154,6 +158,7 @@ int main() {
         break;
       }
       case 16: {
+        auto color = ParseString(cmd);
         int time_left = ParseInt(cmd);
         agent.SetTimeLeft(time_left);
         std::cout << "=16" << std::endl;

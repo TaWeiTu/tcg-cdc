@@ -29,8 +29,10 @@ bool CanCapture(ChessPiece capturer, ChessPiece capturee) {
 }
 
 ChessBoard::ChessBoard()
-    : covered_squares_(static_cast<uint32_t>(-1)),
-      non_covered_squares_(0),
+    : num_covered_pieces_{16, 16},
+      num_pieces_left_{16, 16},
+      uncovered_squares_{0, 0},
+      covered_squares_(static_cast<uint32_t>(-1)),
       current_player_(UNKNOWN),
       hash_value_(0) {
   std::fill(board_.begin(), board_.end(), COVERED_PIECE);
@@ -43,20 +45,22 @@ ChessBoard::ChessBoard()
   covered_[RED_SOLDIER] = covered_[BLACK_SOLDIER] = 5;
 }
 
-std::vector<ChessMove> ChessBoard::ListMoves() {
+std::vector<ChessMove> ChessBoard::ListMoves(ChessColor player) {
   std::vector<ChessMove> moves;
-  for (uint32_t mask = non_covered_squares_; mask > 0;) {
+  uint32_t total = uncovered_squares_[RED] | uncovered_squares_[BLACK];
+  for (uint32_t mask = uncovered_squares_[player]; mask > 0;) {
     int p = __builtin_ctz(mask & -mask);
     assert(board_[p] != NO_PIECE);
-    if (GetChessPieceType(board_[p]) == CANNON) {
+    bool is_cannon = (GetChessPieceType(board_[p]) == CANNON);
+    if (is_cannon) {
       for (int d : {-4, -1, 1, 4}) {
         bool found = false;
         int x = p;
         while (true) {
           if (x + d < 0 || x + d >= kNumCells) break;
-          if ((x % 4) + d < 0 || (x % 4) + d >= 4) break;
+          if (std::abs(d) == 1 && ((x % 4) + d < 0 || (x % 4) + d >= 4)) break;
           x += d;
-          if (non_covered_squares_ >> x & 1) {
+          if (total >> x & 1) {
             found = true;
             break;
           }
@@ -64,21 +68,21 @@ std::vector<ChessMove> ChessBoard::ListMoves() {
         if (!found) continue;
         while (true) {
           if (x + d < 0 || x + d >= kNumCells) break;
-          if ((x % 4) + d < 0 || (x % 4) + d >= 4) break;
+          if (std::abs(d) == 1 && ((x % 4) + d < 0 || (x % 4) + d >= 4)) break;
           x += d;
-          if (non_covered_squares_ >> x & 1) {
+          if (total >> x & 1) {
             if (CanCapture(board_[p], board_[x])) moves.push_back(Move(p, x));
             break;
           }
         }
       }
-    } else {
-      for (int d : {-4, -1, 1, 4}) {
-        if (p + d < 0 || p + d >= kNumCells) continue;
-        if ((p % 4) + d < 0 || (p % 4) + d >= 4) continue;
-        if (!CanCapture(board_[p], board_[p + d])) continue;
-        moves.push_back(Move(p, p + d));
-      }
+    }
+    for (int d : {-4, -1, 1, 4}) {
+      if (p + d < 0 || p + d >= kNumCells) continue;
+      if (std::abs(d) == 1 && ((p % 4) + d < 0 || (p % 4) + d >= 4)) continue;
+      if (is_cannon && board_[p + d] != NO_PIECE) continue;
+      if (!CanCapture(board_[p], board_[p + d])) continue;
+      moves.push_back(Move(p, p + d));
     }
     mask ^= (1U << p);
   }
@@ -97,19 +101,37 @@ void ChessBoard::MakeMove(const ChessMove &mv) {
 
     board_[v.pos] = v.result;
     covered_[v.result]--;
-    non_covered_squares_ ^= (1U << v.pos);
+    assert(!(uncovered_squares_[current_player_] >> v.pos & 1));
+    uncovered_squares_[GetChessPieceColor(v.result)] ^= (1U << v.pos);
+    num_covered_pieces_[GetChessPieceColor(v.result)]--;
     covered_squares_ ^= (1U << v.pos);
   } else {
     auto &v = std::get<Move>(mv);
     assert(board_[v.src] != COVERED_PIECE && board_[v.src] != NO_PIECE);
     assert(board_[v.dst] != COVERED_PIECE);
     assert(CanCapture(board_[v.src], board_[v.dst]));
+
+    if (board_[v.dst] != NO_PIECE) {  // capture
+      assert(GetChessPieceColor(board_[v.dst]) == (current_player_ ^ 1));
+      assert(uncovered_squares_[current_player_ ^ 1] >> v.dst & 1);
+      num_pieces_left_[current_player_ ^ 1]--;
+      uncovered_squares_[current_player_ ^ 1] ^= (1U << v.dst);
+    }
+
+    assert(uncovered_squares_[current_player_] >> v.src & 1);
+    assert(!(uncovered_squares_[current_player_] >> v.dst & 1));
+    uncovered_squares_[current_player_] ^= (1U << v.src);
+    uncovered_squares_[current_player_] ^= (1U << v.dst);
     board_[v.dst] = board_[v.src];
     board_[v.src] = NO_PIECE;
-    non_covered_squares_ ^= (1U << v.src);
   }
 
   current_player_ ^= 1;
+}
+
+constexpr bool ChessBoard::Terminate() const {
+  // TODO: Add other rules to it.
+  return num_pieces_left_[RED] == 0 || num_pieces_left_[BLACK] == 0;
 }
 
 namespace {
