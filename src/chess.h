@@ -2,6 +2,8 @@
 #define CHESS_H_
 
 #include <array>
+#include <cstdint>
+#include <ostream>
 #include <variant>
 #include <vector>
 
