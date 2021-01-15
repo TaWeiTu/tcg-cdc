@@ -2,6 +2,7 @@
 #define CHESS_H_
 
 #include <array>
+#include <variant>
 #include <vector>
 
 enum ChessPiece : uint8_t {
@@ -39,20 +40,30 @@ constexpr ChessPiece GetChessPieceType(ChessPiece piece);
 constexpr bool GetChessPieceColor(ChessPiece piece);
 bool CanCapture(ChessPiece capturer, ChessPiece capturee);
 
-struct ChessMove {
+struct Move {
   uint8_t src;
   uint8_t dst;
 
-  ChessMove() = default;
-  ChessMove(uint8_t s, uint8_t d) : src(s), dst(d) {}
-
-  constexpr bool IsFlip() const { return src == static_cast<uint8_t>(-1); }
+  Move() = default;
+  Move(uint8_t s, uint8_t d) : src(s), dst(d) {}
 };
+
+struct Flip {
+  uint8_t pos;
+  ChessPiece result;
+
+  Flip() = default;
+  Flip(uint8_t p, ChessPiece r) : pos(p), result(r) {}
+};
+
+using ChessMove = std::variant<Move, Flip>;
 
 class ChessBoard {
   static constexpr size_t kNumCells = 32;
   std::array<ChessPiece, kNumCells> board_;
   std::array<uint8_t, kNumChessPieces * 2> covered_;
+  uint32_t covered_squares_;
+  uint32_t non_covered_squares_;
 
  public:
   explicit ChessBoard();

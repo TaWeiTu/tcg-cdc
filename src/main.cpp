@@ -117,19 +117,19 @@ int main() {
         exit(0);
       case 7:
         std::cout << "=7" << std::endl;
-        // TODO: reset board
+        agent.Reset();
         break;
       case 10: {
         uint8_t src = ParseSquare(cmd);
         uint8_t dst = ParseSquare(cmd);
-        // agent.OpponentMove(src, dst);
+        agent.OpponentMove(src, dst);
         std::cout << "=10" << std::endl;
         break;
       }
       case 11: {
         uint8_t pos = ParseSquare(cmd);
         ChessPiece result = ParsePiece(cmd);
-        // agent.OpponentFlip(pos, result);
+        agent.OpponentFlip(pos, result);
         std::cout << "=11" << std::endl;
       }
       case 12: {
