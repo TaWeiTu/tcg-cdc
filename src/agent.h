@@ -8,12 +8,16 @@ class Agent {
   uint32_t time_left_;
   ChessBoard board_;
   ChessColor color_;
+  ChessMove best_move_;
 
   static constexpr int kInf = 1'000'000'000;
-  static constexpr int kDepthLimit = 5;
+  static constexpr int kDepthLimit = 3;
 
-  int NegaScout(int alpha, int beta, int depth, ChessColor color);
-  int Evaluate(const ChessBoard &board) const;
+  int NegaScout(int alpha, int beta, int depth, ChessColor color,
+                BoardUpdater &updater);
+
+  int ChanceNodeSearch(int alpha, int beta, int depth, ChessColor color,
+                       uint8_t pos, BoardUpdater &updater);
 
  public:
   explicit Agent();
