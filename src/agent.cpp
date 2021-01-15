@@ -16,8 +16,20 @@ void Agent::OpponentFlip(uint8_t pos, ChessPiece result) {
   board_.MakeMove(Flip(pos, result));
 }
 
+int Agent::Evaluate(const ChessBoard &board) const { return 0; }
+
+int Agent::NegaScout(int alpha, int beta, int depth, ChessColor color) {
+  if (depth == 0) return Evaluate(board_);
+  auto moves = board_.ListMoves(color);
+  int score = -kInf;  // fail soft
+  for (auto &v : moves) {
+
+  }
+}
+
 ChessMove Agent::GenerateMove() {
   if (color_ == UNKNOWN) return Flip(0);
+  int score = NegaScout(-kInf, kInf, kDepthLimit, color_);
   if (auto mask = board_.GetCoveredSquares(); mask > 0)
     return Flip(__builtin_ctz(mask & -mask));
 

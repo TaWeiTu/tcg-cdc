@@ -89,8 +89,9 @@ std::vector<ChessMove> ChessBoard::ListMoves(ChessColor player) {
   return moves;
 }
 
-void ChessBoard::MakeMove(const ChessMove &mv) {
+void ChessBoard::MakeMove(const ChessMove &mv, BoardUpdater *updater) {
   assert(current_player_ != UNKNOWN || std::holds_alternative<Flip>(mv));
+  if (updater) updater->SaveMove(mv);
   if (std::holds_alternative<Flip>(mv)) {
     auto &v = std::get<Flip>(mv);
     assert(board_[v.pos] == COVERED_PIECE);
@@ -111,6 +112,7 @@ void ChessBoard::MakeMove(const ChessMove &mv) {
     assert(board_[v.dst] != COVERED_PIECE);
     assert(CanCapture(board_[v.src], board_[v.dst]));
 
+    if (updater) updater->AddCaptured(board_[v.dst]);
     if (board_[v.dst] != NO_PIECE) {  // capture
       assert(GetChessPieceColor(board_[v.dst]) == (current_player_ ^ 1));
       assert(uncovered_squares_[current_player_ ^ 1] >> v.dst & 1);
@@ -160,4 +162,41 @@ std::ostream &operator<<(std::ostream &os, const Flip &fp) {
 std::ostream &operator<<(std::ostream &os, const ChessMove &mv) {
   if (std::holds_alternative<Move>(mv)) return os << std::get<Move>(mv);
   return os << std::get<Flip>(mv);
+}
+
+void BoardUpdater::Rewind() {
+  assert(!checkpoints_.empty());
+  size_t s = checkpoints_.back();
+  checkpoints_.pop_back();
+  while (history_.size() > s) {
+    ChessMove mv = history_.back();
+    history_.pop_back();
+    UndoMove(mv);
+  }
+}
+
+void BoardUpdater::UndoMove(ChessMove mv) {
+  auto player = board_.current_player_ ^ 1;
+  if (std::holds_alternative<Flip>(mv)) {
+    auto &v = std::get<Flip>(mv);
+    board_.board_[v.pos] = COVERED_PIECE;
+    board_.covered_[v.result]++;
+    board_.uncovered_squares_[GetChessPieceColor(v.result)] ^= (1U << v.pos);
+    board_.num_covered_pieces_[GetChessPieceColor(v.result)]++;
+    board_.covered_squares_ ^= (1U << v.pos);
+  } else {
+    auto &v = std::get<Move>(mv);
+    assert(!captured_.empty());
+    ChessPiece capturee = captured_.back();
+    captured_.pop_back();
+    if (capturee != NO_PIECE) {
+      board_.num_pieces_left_[player ^ 1]++;
+      board_.uncovered_squares_[player ^ 1] ^= (1U << v.dst);
+    }
+
+    board_.uncovered_squares_[player] ^= (1U << v.src);
+    board_.uncovered_squares_[player] ^= (1U << v.dst);
+    board_.board_[v.src] = board_.board_[v.dst];
+    board_.board_[v.dst] = capturee;
+  }
 }

@@ -9,7 +9,11 @@ class Agent {
   ChessBoard board_;
   ChessColor color_;
 
-  int NegaScount();
+  static constexpr int kInf = 1'000'000'000;
+  static constexpr int kDepthLimit = 5;
+
+  int NegaScout(int alpha, int beta, int depth, ChessColor color);
+  int Evaluate(const ChessBoard &board) const;
 
  public:
   explicit Agent();

@@ -69,6 +69,8 @@ std::ostream &operator<<(std::ostream &os, const ChessMove &mv);
 std::ostream &operator<<(std::ostream &os, const Move &mv);
 std::ostream &operator<<(std::ostream &os, const Flip &fp);
 
+class BoardUpdater;  // forward declaration
+
 class ChessBoard {
   static constexpr size_t kNumCells = 32;
   std::array<ChessPiece, kNumCells> board_;
@@ -86,10 +88,12 @@ class ChessBoard {
     std::array<std::array<uint128_t, kNumChessPieces * 2>, kNumCells> coeff;
   };
 
+  friend class BoardUpdater;
+
  public:
   explicit ChessBoard();
   std::vector<ChessMove> ListMoves(ChessColor player);
-  void MakeMove(const ChessMove &mv);
+  void MakeMove(const ChessMove &mv, BoardUpdater *history = nullptr);
 
   constexpr uint32_t GetCoveredSquares() const { return covered_squares_; }
 
@@ -98,6 +102,22 @@ class ChessBoard {
   }
 
   constexpr bool Terminate() const;
+};
+
+class BoardUpdater {
+  ChessBoard &board_;
+  std::vector<ChessMove> history_;
+  std::vector<ChessPiece> captured_;
+  std::vector<size_t> checkpoints_;
+
+  void UndoMove(ChessMove mv);
+
+ public:
+  explicit BoardUpdater(ChessBoard &b) : board_(b) {}
+  void SaveMove(ChessMove v) { history_.push_back(v); }
+  void RecordCheckpoint() { checkpoints_.push_back(history_.size()); }
+  void AddCaptured(ChessPiece c) { captured_.push_back(c); }
+  void Rewind();
 };
 
 #endif  // CHESS_H_
