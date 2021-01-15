@@ -28,7 +28,7 @@ int ParseInt(std::string_view &cmd) {
   return id;
 }
 
-std::string_view ParseCommand(std::string_view &cmd) {
+std::string_view ParseString(std::string_view &cmd) {
   size_t ptr = 0;
   while (ptr < cmd.size() && std::isalpha(cmd[ptr])) ptr++;
   std::string_view res = cmd.substr(0, ptr);
@@ -103,7 +103,7 @@ int main() {
     std::getline(std::cin, buffer);
     std::string_view cmd = buffer;
     int id = ParseInt(cmd);
-    auto s = ParseCommand(cmd);
+    auto s = ParseString(cmd);
     assert(s == kCmdString[id]);
     switch (id) {
       case 1:
@@ -133,6 +133,16 @@ int main() {
         std::cout << "=11" << std::endl;
       }
       case 12: {
+        auto s = ParseString(cmd);
+        if (s == "unknown") {
+          assert(agent.GetColor() == UNKNOWN);
+        } else {
+          ChessColor expected = (s == "red" ? RED : BLACK);
+          assert(agent.GetColor() == UNKNOWN || agent.GetColor() == expected);
+          agent.SetColor(expected);
+        }
+        auto mv = agent.GenerateMove();
+        std::cout << "=12 " << mv << std::endl;
       }
       case 14:
         std::cout << "=14" << std::endl;

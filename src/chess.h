@@ -5,6 +5,12 @@
 #include <variant>
 #include <vector>
 
+enum ChessColor : uint8_t { RED, BLACK, UNKNOWN };
+
+inline ChessColor &operator^=(ChessColor &c, int p) {
+  return c = ChessColor(c ^ p);
+}
+
 enum ChessPiece : uint8_t {
   NO_PIECE = static_cast<uint8_t>(-1),
   COVERED_PIECE = static_cast<uint8_t>(-2),
@@ -37,7 +43,7 @@ enum ChessPiece : uint8_t {
 };
 
 constexpr ChessPiece GetChessPieceType(ChessPiece piece);
-constexpr bool GetChessPieceColor(ChessPiece piece);
+constexpr ChessColor GetChessPieceColor(ChessPiece piece);
 bool CanCapture(ChessPiece capturer, ChessPiece capturee);
 
 struct Move {
@@ -53,10 +59,15 @@ struct Flip {
   ChessPiece result;
 
   Flip() = default;
+  Flip(uint8_t p) : pos(p) {}
   Flip(uint8_t p, ChessPiece r) : pos(p), result(r) {}
 };
 
 using ChessMove = std::variant<Move, Flip>;
+
+std::ostream &operator<<(std::ostream &os, const ChessMove &mv);
+std::ostream &operator<<(std::ostream &os, const Move &mv);
+std::ostream &operator<<(std::ostream &os, const Flip &fp);
 
 class ChessBoard {
   static constexpr size_t kNumCells = 32;
@@ -64,11 +75,21 @@ class ChessBoard {
   std::array<uint8_t, kNumChessPieces * 2> covered_;
   uint32_t covered_squares_;
   uint32_t non_covered_squares_;
+  ChessColor current_player_;
+
+  using uint128_t = unsigned __int128;
+  uint128_t hash_value_;
+
+  struct ZobristHash {
+    std::array<std::array<uint128_t, kNumChessPieces * 2>, kNumCells> coeff;
+  };
 
  public:
   explicit ChessBoard();
-  std::vector<ChessMove> GenerateMoves();
+  std::vector<ChessMove> ListMoves();
   void MakeMove(const ChessMove &mv);
+
+  constexpr uint32_t GetCoveredSquares() const { return covered_squares_; }
 };
 
 #endif  // CHESS_H_
