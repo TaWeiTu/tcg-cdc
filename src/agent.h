@@ -9,13 +9,12 @@ class Agent {
   ChessBoard board_;
   ChessColor color_;
   ChessMove best_move_;
-  int round_;
 
   static constexpr float kInf = 1E9;
   static constexpr int kDepthLimit = 4;
 
   float NegaScout(float alpha, float beta, int depth, ChessColor color,
-                  BoardUpdater &updater);
+                  bool save_move, BoardUpdater &updater);
 
   float ChanceNodeSearch(float alpha, float beta, int depth, ChessColor color,
                          uint8_t pos, BoardUpdater &updater);
@@ -27,6 +26,7 @@ class Agent {
   void OpponentMove(uint8_t src, uint8_t dst);
   void OpponentFlip(uint8_t pos, ChessPiece result);
   ChessMove GenerateMove();
+  void TraceMoves();
 
   void SetTimeLimit(uint32_t tl) { time_limit_ = tl; }
   void SetTimeLeft(uint32_t tl) { time_left_ = tl; }

@@ -56,11 +56,12 @@ ChessBoard::ChessBoard()
 ChessBoard::ChessBoard(const std::array<std::string, 8> &buffer,
                        const std::array<uint8_t, kNumChessPieces * 2> &covered,
                        ChessColor current_player)
-    : num_covered_pieces_{},
-      num_pieces_left_{},
-      uncovered_squares_{},
+    : num_covered_pieces_{0, 0},
+      num_pieces_left_{0, 0},
+      uncovered_squares_{0, 0},
       covered_(covered),
       current_player_(current_player),
+      covered_squares_(0),
       no_flip_capture_count_(0) {
   for (size_t i = 0; i < 8; ++i) {
     assert(buffer[i].size() == 4);
@@ -76,6 +77,9 @@ ChessBoard::ChessBoard(const std::array<std::string, 8> &buffer,
     if (board_[i] == NO_PIECE || board_[i] == COVERED_PIECE) continue;
     num_pieces_left_[GetChessPieceColor(board_[i])]++;
     uncovered_squares_[GetChessPieceColor(board_[i])] |= (1U << i);
+  }
+  for (size_t i = 0; i < kNumSquares; ++i) {
+    if (board_[i] == COVERED_PIECE) covered_squares_ |= (1U << i);
   }
 }
 

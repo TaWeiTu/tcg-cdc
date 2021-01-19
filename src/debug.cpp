@@ -19,4 +19,5 @@ int main() {
   ChessBoard board(buffer, covered, (player == "RED" ? RED : BLACK));
   Agent agent(board, (player == "RED" ? RED : BLACK));
   agent.GenerateMove();
+  agent.TraceMoves();
 }
