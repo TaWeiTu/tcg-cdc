@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-enum ChessColor : uint8_t { RED, BLACK, UNKNOWN };
+enum ChessColor : uint8_t { RED, BLACK, UNKNOWN, DRAW = UNKNOWN };
 
 inline ChessColor &operator^=(ChessColor &c, int p) {
   return c = ChessColor(int(c) ^ p);
@@ -76,6 +76,47 @@ std::ostream &operator<<(std::ostream &os, const Flip &fp);
 
 class BoardUpdater;  // forward declaration
 
+constexpr std::array<ChessPiece, 128> BuildCharPieceMapping() {
+  std::array<ChessPiece, 128> mapping{};
+  mapping['-'] = NO_PIECE;
+  mapping['X'] = COVERED_PIECE;
+  mapping['P'] = RED_SOLDIER;
+  mapping['C'] = RED_CANNON;
+  mapping['N'] = RED_HORSE;
+  mapping['R'] = RED_CHARIOT;
+  mapping['M'] = RED_ELEPHANT;
+  mapping['G'] = RED_ADVISOR;
+  mapping['K'] = RED_GENERAL;
+  mapping['p'] = BLACK_SOLDIER;
+  mapping['c'] = BLACK_CANNON;
+  mapping['n'] = BLACK_HORSE;
+  mapping['r'] = BLACK_CHARIOT;
+  mapping['m'] = BLACK_ELEPHANT;
+  mapping['g'] = BLACK_ADVISOR;
+  mapping['k'] = BLACK_GENERAL;
+  return mapping;
+}
+
+constexpr std::array<char, 2 * kNumChessPieces + 2> BuildPieceCharMapping() {
+  std::array<char, 2 * kNumChessPieces + 2> mapping{};
+  mapping[NO_PIECE] = '-';
+  mapping[COVERED_PIECE] = 'X';
+  mapping[RED_SOLDIER] = 'P';
+  mapping[RED_CANNON] = 'C';
+  mapping[RED_HORSE] = 'N';
+  mapping[RED_CHARIOT] = 'R';
+  mapping[RED_ELEPHANT] = 'M';
+  mapping[RED_ADVISOR] = 'G';
+  mapping[RED_GENERAL] = 'K';
+  mapping[BLACK_SOLDIER] = 'p';
+  mapping[BLACK_CANNON] = 'c';
+  mapping[BLACK_HORSE] = 'n';
+  mapping[BLACK_CHARIOT] = 'r';
+  mapping[BLACK_ELEPHANT] = 'm';
+  mapping[BLACK_ADVISOR] = 'g';
+  mapping[BLACK_GENERAL] = 'k';
+  return mapping;
+}
 class ChessBoard {
   static constexpr size_t kNumSquares = 32;
   std::array<ChessPiece, kNumSquares> board_;
@@ -84,6 +125,10 @@ class ChessBoard {
   std::array<uint8_t, 2> num_pieces_left_;
   std::array<uint32_t, 2> uncovered_squares_;
   uint32_t covered_squares_;
+
+  static constexpr uint32_t kNoFlipCaptureCountLimit = 60;
+  uint32_t no_flip_capture_count_;
+
   ChessColor current_player_;
 
   using uint128_t = unsigned __int128;
@@ -101,11 +146,16 @@ class ChessBoard {
 
   friend class BoardUpdater;
 
+  static constexpr std::array<ChessPiece, 128> kCharPieceMapping =
+      BuildCharPieceMapping();
+  static constexpr std::array<char, 2 *kNumChessPieces + 2> kPieceCharMapping =
+      BuildPieceCharMapping();
+
  public:
   explicit ChessBoard();
-
-  // Remove copy constructors to avoid accidently having different hashers.
-  ChessBoard(const ChessBoard &board) = delete;
+  explicit ChessBoard(const std::array<std::string, 8> &buffer,
+                      const std::array<uint8_t, kNumChessPieces * 2> &covered,
+                      ChessColor current_player);
 
   std::vector<ChessMove> ListMoves(ChessColor player);
   void MakeMove(const ChessMove &mv, BoardUpdater *updater = nullptr);
@@ -120,8 +170,11 @@ class ChessBoard {
     return covered_;
   }
 
-  constexpr bool Terminate() const;
+  bool Terminate() const;
+  ChessColor GetWinner() const;
   int Evaluate(ChessColor color) const;
+
+  uint32_t GetNoFlipCaptureCount() const { return no_flip_capture_count_; }
 
   friend std::ostream &operator<<(std::ostream &os, const ChessBoard &board);
 };
@@ -130,16 +183,21 @@ class BoardUpdater {
   ChessBoard &board_;
   std::vector<ChessMove> history_;
   std::vector<ChessPiece> captured_;
+  std::vector<uint32_t> no_flip_capture_counts_;
   bool is_initial_;
-  // std::vector<size_t> checkpoints_;
 
   void UndoMove(ChessMove mv);
 
  public:
   explicit BoardUpdater(ChessBoard &b) : board_(b), is_initial_(false) {}
-  void SaveMove(ChessMove v) { history_.push_back(v); }
+  void SaveMove(ChessMove v) { history_.push_back(std::move(v)); }
   void AddCaptured(ChessPiece c) { captured_.push_back(c); }
+  void AddNoFlipCaptureCount(uint32_t c) {
+    no_flip_capture_counts_.push_back(c);
+  }
+
   void SetIsInitial(bool v) { is_initial_ = v; }
+  void MakeMove(const ChessMove &mv);
   void Rewind();
 };
 

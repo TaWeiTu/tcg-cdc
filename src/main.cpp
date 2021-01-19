@@ -90,7 +90,7 @@ constexpr char kCmdString[18][20] = {
     "boardsize",         "reset_board",   "num_repetition",
     "num_moves_to_draw", "move",          "flip",
     "genmove",           "game_over",     "ready",
-    "time_setting",     "time_left",     "showboard"};
+    "time_setting",      "time_left",     "showboard"};
 
 #endif
 
@@ -104,7 +104,7 @@ int main() {
     std::cerr << "received: " << buffer << "\n";
     std::string_view cmd = buffer;
     int id = ParseInt(cmd);
-    auto s = ParseString(cmd);
+    [[maybe_unused]] auto s = ParseString(cmd);
     assert(s == kCmdString[id]);
     switch (id) {
       case 1:
@@ -158,7 +158,7 @@ int main() {
         break;
       }
       case 16: {
-        auto color = ParseString(cmd);
+        [[maybe_unused]] auto color = ParseString(cmd);
         int time_left = ParseInt(cmd);
         agent.SetTimeLeft(time_left);
         std::cout << "=16" << std::endl;

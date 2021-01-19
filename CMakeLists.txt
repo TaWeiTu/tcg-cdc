@@ -6,15 +6,15 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -march=native")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined")
 
 # Enable cppcheck and clang-tidy
-set(CMAKE_CXX_CPPCHECK "cppcheck")
-
-set(CMAKE_CXX_CLANG_TIDY 
-    "clang-tidy;
-     -checks=-*,
-     cppcoreguidelines-*,
-     clang-analyzer-*,
-     google-*performance-*,
-     portability-*,
-     readability-*")
+# set(CMAKE_CXX_CPPCHECK "cppcheck")
+# 
+# set(CMAKE_CXX_CLANG_TIDY 
+#     "clang-tidy;
+#      -checks=-*,
+#      cppcoreguidelines-*,
+#      clang-analyzer-*,
+#      google-*performance-*,
+#      portability-*,
+#      readability-*")
 
 add_subdirectory(src)
