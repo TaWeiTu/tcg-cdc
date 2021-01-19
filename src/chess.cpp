@@ -49,20 +49,20 @@ ChessBoard::ChessBoard()
   covered_[RED_SOLDIER] = covered_[BLACK_SOLDIER] = 5;
 
   for (size_t i = 0; i < kNumSquares; ++i)
-    hash_value_ ^= hasher_.hash_pieces[i][COVERED_PIECE];
-  hash_value_ ^= hasher_.hash_player[UNKNOWN];
+    hash_value_ ^= hasher_.GetPieceHash(i, COVERED_PIECE);
+  hash_value_ ^= hasher_.GetPlayerHash(UNKNOWN);
 }
 
 ChessBoard::ChessBoard(const std::array<std::string, 8> &buffer,
                        const std::array<uint8_t, kNumChessPieces * 2> &covered,
                        ChessColor current_player)
-    : num_covered_pieces_{0, 0},
+    : covered_(covered),
+      num_covered_pieces_{0, 0},
       num_pieces_left_{0, 0},
       uncovered_squares_{0, 0},
-      covered_(covered),
-      current_player_(current_player),
       covered_squares_(0),
-      no_flip_capture_count_(0) {
+      no_flip_capture_count_(0),
+      current_player_(current_player) {
   for (size_t i = 0; i < 8; ++i) {
     assert(buffer[i].size() == 4);
     for (size_t j = 0; j < 4; ++j)
@@ -129,6 +129,18 @@ std::vector<ChessMove> ChessBoard::ListMoves(ChessColor player) {
   return moves;
 }
 
+void ChessBoard::UpdateBoard(uint8_t pos, ChessPiece piece) {
+  hash_value_ ^= hasher_.GetPieceHash(pos, board_[pos]);
+  board_[pos] = piece;
+  hash_value_ ^= hasher_.GetPieceHash(pos, board_[pos]);
+}
+
+void ChessBoard::UpdatePlayer(ChessColor new_player) {
+  hash_value_ ^= hasher_.GetPlayerHash(current_player_);
+  current_player_ = new_player;
+  hash_value_ ^= hasher_.GetPlayerHash(current_player_);
+}
+
 void ChessBoard::MakeMove(const ChessMove &mv, BoardUpdater *updater) {
   assert(current_player_ != UNKNOWN || std::holds_alternative<Flip>(mv));
   no_flip_capture_count_++;
@@ -141,11 +153,12 @@ void ChessBoard::MakeMove(const ChessMove &mv, BoardUpdater *updater) {
     flip_or_capture = true;
 
     if (current_player_ == UNKNOWN) {
-      current_player_ = GetChessPieceColor(v.result);
+      UpdatePlayer(GetChessPieceColor(v.result));
+      hash_value_ ^= hasher_.GetPlayerHash(UNKNOWN);
       if (updater) updater->SetIsInitial(true);
     }
 
-    board_[v.pos] = v.result;
+    UpdateBoard(v.pos, v.result);
     covered_[v.result]--;
     assert(!(uncovered_squares_[current_player_] >> v.pos & 1));
     uncovered_squares_[GetChessPieceColor(v.result)] ^= (1U << v.pos);
@@ -170,11 +183,11 @@ void ChessBoard::MakeMove(const ChessMove &mv, BoardUpdater *updater) {
     assert(!(uncovered_squares_[current_player_] >> v.dst & 1));
     uncovered_squares_[current_player_] ^= (1U << v.src);
     uncovered_squares_[current_player_] ^= (1U << v.dst);
-    board_[v.dst] = board_[v.src];
-    board_[v.src] = NO_PIECE;
+    UpdateBoard(v.dst, board_[v.src]);
+    UpdateBoard(v.src, NO_PIECE);
   }
 
-  current_player_ ^= 1;
+  UpdatePlayer(current_player_ ^ 1);
   if (flip_or_capture) {
     if (updater) updater->AddNoFlipCaptureCount(no_flip_capture_count_);
     no_flip_capture_count_ = 0;
@@ -201,6 +214,16 @@ int ChessBoard::Evaluate(ChessColor color) const {
     (GetChessPieceColor(board_[i]) == color) ? score += v : score -= v;
   }
   return score;
+}
+
+bool ChessBoard::Playable(const ChessMove &mv) const {
+  if (std::holds_alternative<Flip>(mv)) {
+    const auto &v = std::get<Flip>(mv);
+    return board_[v.pos] == COVERED_PIECE;
+  }
+  const auto &v = std::get<Move>(mv);
+  if (board_[v.src] == COVERED_PIECE || board_[v.src] == NO_PIECE) return false;
+  return CanCapture(board_[v.src], board_[v.dst]);
 }
 
 namespace {
@@ -250,27 +273,13 @@ std::ostream &operator<<(std::ostream &os, const ChessBoard &board) {
   return os;
 }
 
-ChessBoard::ZobristHash::ZobristHash(uint64_t seed) {
-  std::mt19937 rng(seed);
-  std::uniform_int_distribution<uint64_t> dist;
-
-  auto Rand128 = [&rng, &dist]() -> uint128_t {
-    return (uint128_t(dist(rng)) << 64) | uint128_t(dist(rng));
-  };
-
-  for (size_t i = 0; i < hash_pieces.size(); ++i) {
-    std::generate(hash_pieces[i].begin(), hash_pieces[i].end(), Rand128);
-  }
-  for (size_t i = 0; i < 3; ++i) hash_player[i] = Rand128();
-}
-
 void BoardUpdater::MakeMove(const ChessMove &mv) { board_.MakeMove(mv, this); }
 
 void BoardUpdater::Rewind() {
   assert(!history_.empty());
   UndoMove(history_.back());
   history_.pop_back();
-  if (is_initial_ && history_.empty()) board_.current_player_ = UNKNOWN;
+  if (is_initial_ && history_.empty()) board_.UpdatePlayer(UNKNOWN);
 }
 
 void BoardUpdater::UndoMove(ChessMove mv) {
@@ -278,7 +287,7 @@ void BoardUpdater::UndoMove(ChessMove mv) {
   bool flip_or_capture = false;
   if (std::holds_alternative<Flip>(mv)) {
     auto &v = std::get<Flip>(mv);
-    board_.board_[v.pos] = COVERED_PIECE;
+    board_.UpdateBoard(v.pos, COVERED_PIECE);
     board_.covered_[v.result]++;
     board_.uncovered_squares_[GetChessPieceColor(v.result)] ^= (1U << v.pos);
     board_.num_covered_pieces_[GetChessPieceColor(v.result)]++;
@@ -297,10 +306,10 @@ void BoardUpdater::UndoMove(ChessMove mv) {
 
     board_.uncovered_squares_[player] ^= (1U << v.src);
     board_.uncovered_squares_[player] ^= (1U << v.dst);
-    board_.board_[v.src] = board_.board_[v.dst];
-    board_.board_[v.dst] = capturee;
+    board_.UpdateBoard(v.src, board_.board_[v.dst]);
+    board_.UpdateBoard(v.dst, capturee);
   }
-  board_.current_player_ ^= 1;
+  board_.UpdatePlayer(board_.current_player_ ^ 1);
   if (flip_or_capture) {
     assert(!no_flip_capture_counts_.empty());
     board_.no_flip_capture_count_ = no_flip_capture_counts_.back();

@@ -2,6 +2,7 @@
 #define AGENT_H_
 
 #include "chess.h"
+#include "hash.h"
 
 class Agent {
   uint32_t time_limit_;
@@ -9,9 +10,12 @@ class Agent {
   ChessBoard board_;
   ChessColor color_;
   ChessMove best_move_;
+  TranspositionTable<20, ChessMove> table_;
+  int depth_limit_, num_flip_;
 
   static constexpr float kInf = 1E9;
-  static constexpr int kDepthLimit = 4;
+  static constexpr int kDepthLimit = 7;
+  static constexpr float kRange = 5;
 
   float NegaScout(float alpha, float beta, int depth, ChessColor color,
                   bool save_move, BoardUpdater &updater);
@@ -23,8 +27,8 @@ class Agent {
   explicit Agent();
   explicit Agent(const ChessBoard &board, ChessColor color);
 
-  void OpponentMove(uint8_t src, uint8_t dst);
-  void OpponentFlip(uint8_t pos, ChessPiece result);
+  void MakeMove(uint8_t src, uint8_t dst);
+  void MakeFlip(uint8_t pos, ChessPiece result);
   ChessMove GenerateMove();
   void TraceMoves();
 

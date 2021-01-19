@@ -123,14 +123,14 @@ int main() {
       case 10: {
         uint8_t src = ParseSquare(cmd);
         uint8_t dst = ParseSquare(cmd);
-        agent.OpponentMove(src, dst);
+        agent.MakeMove(src, dst);
         std::cout << "=10" << std::endl;
         break;
       }
       case 11: {
         uint8_t pos = ParseSquare(cmd);
         ChessPiece result = ParsePiece(cmd);
-        agent.OpponentFlip(pos, result);
+        agent.MakeFlip(pos, result);
         std::cout << "=11" << std::endl;
         break;
       }

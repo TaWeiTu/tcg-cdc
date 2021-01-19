@@ -7,6 +7,8 @@
 #include <variant>
 #include <vector>
 
+#include "hash.h"
+
 enum ChessColor : uint8_t { RED, BLACK, UNKNOWN, DRAW = UNKNOWN };
 
 inline ChessColor &operator^=(ChessColor &c, int p) {
@@ -133,23 +135,17 @@ class ChessBoard {
 
   using uint128_t = unsigned __int128;
   uint128_t hash_value_;
-
-  struct ZobristHash {
-    std::array<std::array<uint128_t, kNumChessPieces * 2 + 2>, kNumSquares>
-        hash_pieces;
-    std::array<uint128_t, 3> hash_player;
-
-    explicit ZobristHash(uint64_t seed = 0);
-  };
-
-  ZobristHash hasher_;
+  ZobristHash<kNumSquares, kNumChessPieces * 2 + 2, 3> hasher_;
 
   friend class BoardUpdater;
 
   static constexpr std::array<ChessPiece, 128> kCharPieceMapping =
       BuildCharPieceMapping();
-  static constexpr std::array<char, 2 *kNumChessPieces + 2> kPieceCharMapping =
+  static constexpr std::array<char, kNumChessPieces * 2 + 2> kPieceCharMapping =
       BuildPieceCharMapping();
+
+  void UpdateBoard(uint8_t pos, ChessPiece piece);
+  void UpdatePlayer(ChessColor new_player);
 
  public:
   explicit ChessBoard();
@@ -166,6 +162,8 @@ class ChessBoard {
     return num_covered_pieces_[c];
   }
 
+  constexpr uint128_t GetHashValue() const { return hash_value_; }
+
   const std::array<uint8_t, kNumChessPieces * 2> &GetCoveredPieces() const {
     return covered_;
   }
@@ -173,6 +171,7 @@ class ChessBoard {
   bool Terminate() const;
   ChessColor GetWinner() const;
   int Evaluate(ChessColor color) const;
+  bool Playable(const ChessMove &mv) const;
 
   uint32_t GetNoFlipCaptureCount() const { return no_flip_capture_count_; }
 

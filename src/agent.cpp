@@ -6,15 +6,19 @@
 
 #include "chess.h"
 
-Agent::Agent() : color_(UNKNOWN), round_(0) {}
+Agent::Agent() : color_(UNKNOWN), table_(), depth_limit_(3), num_flip_(0) {}
 Agent::Agent(const ChessBoard &board, ChessColor color)
-    : board_(board), color_(color), round_(0) {}
+    : board_(board), color_(color), table_() {}
 
-void Agent::OpponentMove(uint8_t src, uint8_t dst) {
+void Agent::MakeMove(uint8_t src, uint8_t dst) {
   board_.MakeMove(Move(src, dst));
 }
 
-void Agent::OpponentFlip(uint8_t pos, ChessPiece result) {
+void Agent::MakeFlip(uint8_t pos, ChessPiece result) {
+  if (++num_flip_ == 8) {
+    depth_limit_ = std::min(kDepthLimit, depth_limit_ + 1);
+    num_flip_ = 0;
+  }
   board_.MakeMove(Flip(pos, result));
 }
 
@@ -44,8 +48,38 @@ float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
     if (winner == DRAW) return 0;
     return winner == color ? 2000 : -2000;
   }
-  auto moves = board_.ListMoves(color);
   float score = -kInf;  // fail soft
+  const uint128_t hv = board_.GetHashValue();
+  auto &entry = table_.GetEntry(hv);
+  if (entry.flag != NO_VALUE && entry.hash_value == hv &&
+      board_.Playable(entry.best_move)) {
+    if (entry.depth < depth) {
+      if (entry.flag == EXACT_VALUE) {
+        score = entry.score;
+        if (save_move) best_move_ = entry.best_move;
+      }
+    } else {
+      if (entry.flag == EXACT_VALUE) {
+        if (save_move) best_move_ = entry.best_move;
+        return entry.score;
+      }
+      if (entry.flag == LOWER_BOUND) {
+        if (entry.score >= beta) {
+          if (save_move) best_move_ = entry.best_move;
+          return entry.score;
+        }
+        alpha = std::max(alpha, entry.score);
+      } else {
+        if (entry.score <= alpha) {
+          if (save_move) best_move_ = entry.best_move;
+          return entry.score;
+        }
+        beta = std::min(beta, entry.score);
+      }
+    }
+  }
+  ChessMove opt;
+  auto moves = board_.ListMoves(color);
   float upper_bound = beta;
   for (auto &v : moves) {
     updater.MakeMove(v);
@@ -53,12 +87,16 @@ float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
                          color ^ 1, false, updater);
     if (t > score) {  // failed-high
       score = t;
+      opt = v;
       if (save_move) best_move_ = v;
       if (upper_bound != beta && depth >= 3 && t < beta)
         score = -NegaScout(-beta, -t, depth - 1, color ^ 1, false, updater);
     }
     updater.Rewind();
-    if (score >= beta) return score;
+    if (score >= beta) {
+      entry = Entry<ChessMove>(LOWER_BOUND, hv, score, depth, v);
+      return score;
+    }
     upper_bound = std::max(score, alpha) + 1;
   }
   if (auto mask = board_.GetCoveredSquares(); mask > 0) {
@@ -68,22 +106,28 @@ float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
                                  updater);
       if (t > score) {
         score = t;
+        opt = Flip(p);
         if (save_move) best_move_ = Flip(p);
       }
-      if (score >= beta) return score;
+      if (score >= beta) {
+        entry = Entry<ChessMove>(LOWER_BOUND, hv, score, depth, Flip(p));
+        return score;
+      }
       mask ^= (1U << p);
     }
   }
+  Status flag = (score > alpha) ? EXACT_VALUE : UPPER_BOUND;
+  entry = Entry<ChessMove>(flag, hv, score, depth, opt);
   return score;
 }
 
 ChessMove Agent::GenerateMove() {
   if (color_ == UNKNOWN) return Flip(0);
   std::cerr << "before: " << board_ << "\n";
-  BoardUpdater updater(board_);
   best_move_ = Flip(255, NO_PIECE);
-  [[maybe_unused]] float score =
-      NegaScout(-kInf, kInf, kDepthLimit, color_, true, updater);
+  BoardUpdater updater(board_);
+  std::cerr << "depth limit = " << depth_limit_ << "\n";
+  float score = NegaScout(-kInf, kInf, depth_limit_, color_, true, updater);
   std::cerr << "NegaScout score = " << score << "\n";
   std::cerr << "board: "
             << "\n";
