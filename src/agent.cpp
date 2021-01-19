@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <iostream>
 
 #include "chess.h"
@@ -16,7 +17,7 @@ void Agent::MakeMove(uint8_t src, uint8_t dst) {
 
 void Agent::MakeFlip(uint8_t pos, ChessPiece result) {
   if (++num_flip_ == 8) {
-    depth_limit_ = std::min(kDepthLimit, depth_limit_ + 1);
+    if (depth_limit_ < kDepthSoftLimit) depth_limit_++;
     num_flip_ = 0;
   }
   board_.MakeMove(Flip(pos, result));
@@ -46,7 +47,7 @@ float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
   if (board_.Terminate()) {
     ChessColor winner = board_.GetWinner();
     if (winner == DRAW) return 0;
-    return winner == color ? 2000 : -2000;
+    return (winner == color ? 2000 : -2000) * (depth + 1);
   }
   float score = -kInf;  // fail soft
   const uint128_t hv = board_.GetHashValue();
@@ -124,10 +125,51 @@ float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
 ChessMove Agent::GenerateMove() {
   if (color_ == UNKNOWN) return Flip(0);
   std::cerr << "before: " << board_ << "\n";
-  best_move_ = Flip(255, NO_PIECE);
   BoardUpdater updater(board_);
   std::cerr << "depth limit = " << depth_limit_ << "\n";
-  float score = NegaScout(-kInf, kInf, depth_limit_, color_, true, updater);
+  int last_search_elapsed = 0;
+  float score = NegaScout(-kInf, kInf, 3, color_, true, updater);
+  for (int depth_lim = 4; depth_lim <= depth_limit_; ++depth_lim) {
+    float alpha = score - kRange, beta = score + kRange;
+    auto time_start = std::chrono::system_clock::now();
+    best_move_ = Flip(255, NO_PIECE);
+    score = NegaScout(alpha, beta, depth_lim, color_, true, updater);
+    if (score <= alpha) {
+      best_move_ = Flip(255, NO_PIECE);
+      score = NegaScout(-kInf, score, depth_lim, color_, true, updater);
+    } else if (score >= beta) {
+      best_move_ = Flip(255, NO_PIECE);
+      score = NegaScout(score, kInf, depth_lim, color_, true, updater);
+    }
+    auto time_end = std::chrono::system_clock::now();
+    last_search_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              time_end - time_start)
+                              .count();
+  }
+  if (depth_limit_ == kDepthSoftLimit) {
+    int depth_lim = depth_limit_;
+    while (depth_lim < kDepthHardLimit &&
+           last_search_elapsed <= kTimeThreshold) {
+      depth_lim++;
+      std::cerr << "keep searching depth = " << depth_lim << "\n";
+      float alpha = score - kRange, beta = score + kRange;
+      auto time_start = std::chrono::system_clock::now();
+      best_move_ = Flip(255, NO_PIECE);
+      score = NegaScout(alpha, beta, depth_lim, color_, true, updater);
+      if (score <= alpha) {
+        best_move_ = Flip(255, NO_PIECE);
+        score = NegaScout(-kInf, score, depth_lim, color_, true, updater);
+      } else if (score >= beta) {
+        best_move_ = Flip(255, NO_PIECE);
+        score = NegaScout(score, kInf, depth_lim, color_, true, updater);
+      }
+      auto time_end = std::chrono::system_clock::now();
+      last_search_elapsed =
+          std::chrono::duration_cast<std::chrono::milliseconds>(time_end -
+                                                                time_start)
+              .count();
+    }
+  }
   std::cerr << "NegaScout score = " << score << "\n";
   std::cerr << "board: "
             << "\n";
@@ -138,9 +180,9 @@ ChessMove Agent::GenerateMove() {
 void Agent::TraceMoves() {
   ChessColor color = color_;
   BoardUpdater updater(board_);
-  for (size_t i = 0; i < kDepthLimit; ++i) {
+  for (size_t i = 0; i < depth_limit_; ++i) {
     std::cout << "NegaScout score = "
-              << NegaScout(-kInf, kInf, kDepthLimit - i, color, true, updater)
+              << NegaScout(-kInf, kInf, depth_limit_ - i, color, true, updater)
               << "\n";
     std::cout << "best_move = " << best_move_ << "\n";
     board_.MakeMove(best_move_);

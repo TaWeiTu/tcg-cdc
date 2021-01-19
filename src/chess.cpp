@@ -83,9 +83,66 @@ ChessBoard::ChessBoard(const std::array<std::string, 8> &buffer,
   }
 }
 
-std::vector<ChessMove> ChessBoard::ListMoves(ChessColor player) {
+uint8_t ChessBoard::GetCannonTarget(ChessColor color, uint8_t pos,
+                                    int d) const {
   const uint32_t kNonEmpty =
       covered_squares_ | uncovered_squares_[RED] | uncovered_squares_[BLACK];
+  bool found = false;
+  int x = pos;
+  while (true) {
+    if (x + d < 0 || x + d >= kNumSquares) break;
+    if (std::abs(d) == 1 && ((x % 4) + d < 0 || (x % 4) + d >= 4)) break;
+    x += d;
+    if (kNonEmpty >> x & 1) {
+      found = true;
+      break;
+    }
+  }
+  if (!found) return static_cast<uint8_t>(-1);
+  while (true) {
+    if (x + d < 0 || x + d >= kNumSquares) break;
+    if (std::abs(d) == 1 && ((x % 4) + d < 0 || (x % 4) + d >= 4)) break;
+    x += d;
+    if (kNonEmpty >> x & 1) {
+      if (uncovered_squares_[color ^ 1] >> x & 1) return x;
+      break;
+    }
+  }
+  return static_cast<uint8_t>(-1);
+}
+
+uint32_t ChessBoard::MarkUnderAttack() const {
+  uint32_t under_attack = 0;
+  for (ChessColor color : {RED, BLACK}) {
+    for (uint32_t mask = uncovered_squares_[color]; mask > 0;) {
+      int p = __builtin_ctz(mask & -mask);
+      assert(board_[p] != NO_PIECE);
+      bool is_cannon = (GetChessPieceType(board_[p]) == CANNON);
+      if (is_cannon) {
+        for (int d : {-4, -1, 1, 4}) {
+          uint8_t x = GetCannonTarget(color, p, d);
+          if (x != static_cast<uint8_t>(-1)) under_attack |= (1U << x);
+        }
+      } else {
+        for (int d : {-4, -1, 1, 4}) {
+          if (p + d < 0 || p + d >= kNumSquares) continue;
+          if (std::abs(d) == 1 && ((p % 4) + d < 0 || (p % 4) + d >= 4))
+            continue;
+          if (under_attack >> (p + d) & 1) continue;
+          if (board_[p + d] == NO_PIECE || board_[p + d] == COVERED_PIECE)
+            continue;
+
+          if (CanCapture(board_[p], board_[p + d]))
+            under_attack ^= (1U << (p + d));
+        }
+      }
+      mask ^= (1U << p);
+    }
+  }
+  return under_attack;
+}
+
+std::vector<ChessMove> ChessBoard::ListMoves(ChessColor player) {
   std::vector<ChessMove> moves;
   for (uint32_t mask = uncovered_squares_[player]; mask > 0;) {
     int p = __builtin_ctz(mask & -mask);
@@ -93,28 +150,8 @@ std::vector<ChessMove> ChessBoard::ListMoves(ChessColor player) {
     bool is_cannon = (GetChessPieceType(board_[p]) == CANNON);
     if (is_cannon) {
       for (int d : {-4, -1, 1, 4}) {
-        bool found = false;
-        int x = p;
-        while (true) {
-          if (x + d < 0 || x + d >= kNumSquares) break;
-          if (std::abs(d) == 1 && ((x % 4) + d < 0 || (x % 4) + d >= 4)) break;
-          x += d;
-          if (kNonEmpty >> x & 1) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) continue;
-        while (true) {
-          if (x + d < 0 || x + d >= kNumSquares) break;
-          if (std::abs(d) == 1 && ((x % 4) + d < 0 || (x % 4) + d >= 4)) break;
-          x += d;
-          if (kNonEmpty >> x & 1) {
-            if (uncovered_squares_[player ^ 1] >> x & 1)
-              moves.push_back(Move(p, x));
-            break;
-          }
-        }
+        uint8_t x = GetCannonTarget(player, p, d);
+        if (x != static_cast<uint8_t>(-1)) moves.push_back(Move(p, x));
       }
     }
     for (int d : {-4, -1, 1, 4}) {
@@ -205,14 +242,25 @@ ChessColor ChessBoard::GetWinner() const {
   return num_pieces_left_[RED] == 0 ? BLACK : RED;
 }
 
-int ChessBoard::Evaluate(ChessColor color) const {
-  static constexpr int kValue[7] = {1, 180, 6, 18, 90, 270, 810};
-  int score = 0;
+float ChessBoard::Evaluate(ChessColor color) const {
+  static constexpr float kValue[7] = {1, 180, 6, 18, 90, 270, 810};
+  static constexpr float kCoefDangerous = 3;
+  float score = 0;
+  uint32_t under_attack = MarkUnderAttack();
   for (size_t i = 0; i < kNumSquares; ++i) {
     if (board_[i] == NO_PIECE || board_[i] == COVERED_PIECE) continue;
-    int v = kValue[GetChessPieceType(board_[i])];
+    float v = kValue[GetChessPieceType(board_[i])];
+    if (under_attack >> i & 1) v /= kCoefDangerous;
     (GetChessPieceColor(board_[i]) == color) ? score += v : score -= v;
   }
+  static constexpr float kCoefCovered = 5;
+  for (uint8_t i = 0; i < kNumChessPieces * 2; ++i) {
+    if (covered_[i] == 0) continue;
+    float v =
+        kValue[GetChessPieceType(ChessPiece(i))] * covered_[i] / kCoefCovered;
+    (GetChessPieceColor(ChessPiece(i)) == color) ? score += v : score -= v;
+  }
+  if (no_flip_capture_count_ >= kNoFlipCaptureCountLimit / 2) score /= 2;
   return score;
 }
 

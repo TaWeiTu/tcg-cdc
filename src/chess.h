@@ -147,6 +147,9 @@ class ChessBoard {
   void UpdateBoard(uint8_t pos, ChessPiece piece);
   void UpdatePlayer(ChessColor new_player);
 
+  uint8_t GetCannonTarget(ChessColor color, uint8_t pos, int d) const;
+  uint32_t MarkUnderAttack() const;
+
  public:
   explicit ChessBoard();
   explicit ChessBoard(const std::array<std::string, 8> &buffer,
@@ -170,7 +173,7 @@ class ChessBoard {
 
   bool Terminate() const;
   ChessColor GetWinner() const;
-  int Evaluate(ChessColor color) const;
+  float Evaluate(ChessColor color) const;
   bool Playable(const ChessMove &mv) const;
 
   uint32_t GetNoFlipCaptureCount() const { return no_flip_capture_count_; }

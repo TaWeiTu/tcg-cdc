@@ -14,8 +14,10 @@ class Agent {
   int depth_limit_, num_flip_;
 
   static constexpr float kInf = 1E9;
-  static constexpr int kDepthLimit = 7;
+  static constexpr int kDepthSoftLimit = 7;
+  static constexpr int kDepthHardLimit = 15;
   static constexpr float kRange = 5;
+  static constexpr int kTimeThreshold = 500;
 
   float NegaScout(float alpha, float beta, int depth, ChessColor color,
                   bool save_move, BoardUpdater &updater);
