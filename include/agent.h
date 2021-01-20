@@ -1,6 +1,8 @@
 #ifndef AGENT_H_
 #define AGENT_H_
 
+#include <utility>
+
 #include "chess.h"
 #include "hash.h"
 
