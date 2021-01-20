@@ -121,54 +121,46 @@ float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
   return score;
 }
 
+std::pair<float, int> Agent::SearchSingleDepth(float alpha, float beta,
+                                               int depth,
+                                               BoardUpdater &updater) {
+  auto time_start = std::chrono::system_clock::now();
+  best_move_ = Flip(255, NO_PIECE);
+  float score = NegaScout(alpha, beta, depth, color_, true, updater);
+  if (score <= alpha) {
+    best_move_ = Flip(255, NO_PIECE);
+    score = NegaScout(-kInf, score, depth, color_, true, updater);
+  } else if (score >= beta) {
+    best_move_ = Flip(255, NO_PIECE);
+    score = NegaScout(score, kInf, depth, color_, true, updater);
+  }
+  auto time_end = std::chrono::system_clock::now();
+  int time_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         time_end - time_start)
+                         .count();
+  return std::make_pair(score, time_elapsed);
+}
+
 ChessMove Agent::GenerateMove() {
   if (color_ == UNKNOWN) return Flip(0);
-  std::cerr << "before: " << board_ << "\n";
   BoardUpdater updater(board_);
   std::cerr << "depth limit = " << depth_limit_ << "\n";
-  int last_search_elapsed = 0;
-  float score = NegaScout(-kInf, kInf, 3, color_, true, updater);
+  auto [score, last_search_elapsed] =
+      SearchSingleDepth(-kInf, kInf, 3, updater);
   for (int depth_lim = 4; depth_lim <= depth_limit_; ++depth_lim) {
     float alpha = score - kRange, beta = score + kRange;
-    auto time_start = std::chrono::system_clock::now();
-    best_move_ = Flip(255, NO_PIECE);
-    score = NegaScout(alpha, beta, depth_lim, color_, true, updater);
-    if (score <= alpha) {
-      best_move_ = Flip(255, NO_PIECE);
-      score = NegaScout(-kInf, score, depth_lim, color_, true, updater);
-    } else if (score >= beta) {
-      best_move_ = Flip(255, NO_PIECE);
-      score = NegaScout(score, kInf, depth_lim, color_, true, updater);
-    }
-    auto time_end = std::chrono::system_clock::now();
-    last_search_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              time_end - time_start)
-                              .count();
+    std::tie(score, last_search_elapsed) =
+        SearchSingleDepth(alpha, beta, depth_lim, updater);
   }
-  int depth_lim = depth_limit_;
-  while (depth_lim < kDepthLimit && last_search_elapsed <= kTimeThreshold) {
+  for (int depth_lim = depth_limit_;
+       depth_lim < kDepthLimit && last_search_elapsed <= kTimeThreshold;) {
     depth_lim++;
     std::cerr << "keep searching depth = " << depth_lim << "\n";
     float alpha = score - kRange, beta = score + kRange;
-    auto time_start = std::chrono::system_clock::now();
-    best_move_ = Flip(255, NO_PIECE);
-    score = NegaScout(alpha, beta, depth_lim, color_, true, updater);
-    if (score <= alpha) {
-      best_move_ = Flip(255, NO_PIECE);
-      score = NegaScout(-kInf, score, depth_lim, color_, true, updater);
-    } else if (score >= beta) {
-      best_move_ = Flip(255, NO_PIECE);
-      score = NegaScout(score, kInf, depth_lim, color_, true, updater);
-    }
-    auto time_end = std::chrono::system_clock::now();
-    last_search_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              time_end - time_start)
-                              .count();
+    std::tie(score, last_search_elapsed) =
+        SearchSingleDepth(alpha, beta, depth_lim, updater);
   }
   std::cerr << "NegaScout score = " << score << "\n";
-  std::cerr << "board: "
-            << "\n";
-  std::cerr << board_ << "\n";
   return best_move_;
 }
 

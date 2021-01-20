@@ -24,6 +24,9 @@ class Agent {
   float ChanceNodeSearch(float alpha, float beta, int depth, ChessColor color,
                          uint8_t pos, BoardUpdater &updater);
 
+  std::pair<float, int> SearchSingleDepth(float alpha, float beta, int depth,
+                                          BoardUpdater &updater);
+
  public:
   explicit Agent();
   explicit Agent(const ChessBoard &board, ChessColor color);
