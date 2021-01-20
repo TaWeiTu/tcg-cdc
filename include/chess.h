@@ -192,10 +192,11 @@ class BoardUpdater {
   void UndoMove(ChessMove mv);
 
  public:
-  explicit BoardUpdater(ChessBoard &b) : board_(b), is_initial_(false) {}
+  explicit BoardUpdater(ChessBoard &b);
   void SaveMove(ChessMove v) { history_.push_back(std::move(v)); }
-  void AddCaptured(ChessPiece c) { captured_.push_back(c); }
-  void AddNoFlipCaptureCount(uint32_t c) {
+  void SaveCaptured(ChessPiece c) { captured_.push_back(c); }
+
+  void SaveNoFlipCaptureCount(uint32_t c) {
     no_flip_capture_counts_.push_back(c);
   }
 

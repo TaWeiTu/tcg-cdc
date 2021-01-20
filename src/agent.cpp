@@ -80,6 +80,11 @@ float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
   }
   ChessMove opt;
   auto moves = board_.ListMoves(color);
+
+  if (moves.empty() && board_.GetCoveredSquares() == 0) {
+    return -2000 * (depth + 1);
+  }
+
   float upper_bound = beta;
   for (auto &v : moves) {
     updater.MakeMove(v);

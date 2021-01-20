@@ -216,7 +216,7 @@ void ChessBoard::MakeMove(const ChessMove &mv, BoardUpdater *updater) {
     assert(board_[v.dst] != COVERED_PIECE);
     assert(CanCapture(board_[v.src], board_[v.dst]));
 
-    if (updater) updater->AddCaptured(board_[v.dst]);
+    if (updater) updater->SaveCaptured(board_[v.dst]);
     if (board_[v.dst] != NO_PIECE) {  // capture
       flip_or_capture = true;
       assert(GetChessPieceColor(board_[v.dst]) == (current_player_ ^ 1));
@@ -235,7 +235,7 @@ void ChessBoard::MakeMove(const ChessMove &mv, BoardUpdater *updater) {
 
   UpdatePlayer(current_player_ ^ 1);
   if (flip_or_capture) {
-    if (updater) updater->AddNoFlipCaptureCount(no_flip_capture_count_);
+    if (updater) updater->SaveNoFlipCaptureCount(no_flip_capture_count_);
     no_flip_capture_count_ = 0;
   }
 }
@@ -257,6 +257,8 @@ float ChessBoard::Evaluate(ChessColor color) const {
   float score = 0;
   uint32_t under_attack = MarkUnderAttack();
   bool general_revealed[2] = {false, false};
+  bool general_covered[2] = {covered_[RED_GENERAL] > 0,
+                             covered_[BLACK_GENERAL] > 0};
   for (size_t i = 0; i < kNumSquares; ++i) {
     if (board_[i] == RED_GENERAL) general_revealed[RED] = true;
     if (board_[i] == BLACK_GENERAL) general_revealed[BLACK] = true;
@@ -264,9 +266,15 @@ float ChessBoard::Evaluate(ChessColor color) const {
 
   auto GetValue = [&](ChessPiece piece) -> float {
     ChessPiece type = GetChessPieceType(piece);
-    if (general_revealed[GetChessPieceColor(piece) ^ 1]) {
+    ChessColor opponent = GetChessPieceColor(piece) ^ 1;
+    // The martial values of soldiers and cannon increase when the general shows
+    // up in the endgame.
+    if (general_revealed[opponent]) {
       if (type == SOLDIER) return 20;
       if (type == CANNON) return 250;
+    } else if (general_covered[opponent]) {
+      if (type == SOLDIER) return 10;
+      if (type == CANNON) return 200;
     }
     return kValue[type];
   };
@@ -283,6 +291,7 @@ float ChessBoard::Evaluate(ChessColor color) const {
     float v = GetValue(ChessPiece(i)) * covered_[i] / kCoefCovered;
     (GetChessPieceColor(ChessPiece(i)) == color) ? score += v : score -= v;
   }
+  if (no_flip_capture_count_ >= kNoFlipCaptureCountLimit / 6) score /= 2;
   if (no_flip_capture_count_ >= kNoFlipCaptureCountLimit / 2) score /= 2;
   return score;
 }
@@ -344,6 +353,8 @@ std::ostream &operator<<(std::ostream &os, const ChessBoard &board) {
   return os;
 }
 
+BoardUpdater::BoardUpdater(ChessBoard &b) : board_(b), is_initial_(false) {}
+
 void BoardUpdater::MakeMove(const ChessMove &mv) { board_.MakeMove(mv, this); }
 
 void BoardUpdater::Rewind() {
@@ -380,7 +391,7 @@ void BoardUpdater::UndoMove(ChessMove mv) {
     board_.UpdateBoard(v.src, board_.board_[v.dst]);
     board_.UpdateBoard(v.dst, capturee);
   }
-  board_.UpdatePlayer(board_.current_player_ ^ 1);
+  board_.UpdatePlayer(player);
   if (flip_or_capture) {
     assert(!no_flip_capture_counts_.empty());
     board_.no_flip_capture_count_ = no_flip_capture_counts_.back();
