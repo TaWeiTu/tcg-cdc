@@ -279,17 +279,61 @@ float ChessBoard::Evaluate(ChessColor color) const {
     return kValue[type];
   };
 
+  std::array<std::array<uint8_t, kNumChessPieces>, 2> counter{};
+  for (size_t i = 0; i < 2; ++i) {
+    std::fill(counter[i].begin(), counter[i].end(), 0);
+  }
+  std::array<ChessPiece, kNumSquares> available_pieces;
+  size_t ptr = 0;
   for (size_t i = 0; i < kNumSquares; ++i) {
     if (board_[i] == NO_PIECE || board_[i] == COVERED_PIECE) continue;
+    counter[GetChessPieceColor(board_[i])][GetChessPieceType(board_[i])]++;
     float v = GetValue(board_[i]);
     if (under_attack >> i & 1) v /= kCoefDangerous;
     (GetChessPieceColor(board_[i]) == color) ? score += v : score -= v;
+    available_pieces[ptr++] = board_[i];
   }
-  static constexpr float kCoefCovered = 5;
-  for (uint8_t i = 0; i < kNumChessPieces * 2; ++i) {
-    if (covered_[i] == 0) continue;
-    float v = GetValue(ChessPiece(i)) * covered_[i] / kCoefCovered;
-    (GetChessPieceColor(ChessPiece(i)) == color) ? score += v : score -= v;
+  if (covered_squares_ == 0) {
+    // If one of the pieces dominates all pieces of the opponent's, the value of
+    // the board will be proportional to the number of remaining pieces of the
+    // opponent's.
+    for (size_t i = 0; i < 2; ++i) {
+      for (size_t j = 1; j < kNumChessPieces; ++j) {
+        counter[i][j] += counter[i][j - 1];
+      }
+    }
+    static constexpr float kDominateScore = 10000;
+    for (size_t i = 0; i < ptr; ++i) {
+      const auto &piece = available_pieces[i];
+      auto type = GetChessPieceType(piece);
+      auto col = GetChessPieceColor(piece);
+      bool dominate = false;
+      if (type == SOLDIER) {
+        // If the general is the only piece left.
+        dominate = (counter[col ^ 1][GENERAL] == counter[col ^ 1][GENERAL - 1]);
+      } else if (type == GENERAL) {
+        // If all the soldiers are captured.
+        dominate = (counter[col ^ 1][SOLDIER] == 0);
+      } else if (type != CANNON) {
+        // If the rooks are captured and all other pieces are of lower ranks.
+        dominate = (counter[col ^ 1][CANNON] == counter[col ^ 1][CANNON - 1] &&
+                    counter[GENERAL] == counter[type - 1]);
+      }
+      if (dominate) {
+        // The score is kDominateScore divide by the number of remaining pieces
+        // plus 1.
+        float score = kDominateScore / (counter[col ^ 1][GENERAL] + 1);
+        if (col != color) score = -score;
+        return score;
+      }
+    }
+  } else {
+    static constexpr float kCoefCovered = 5;
+    for (uint8_t i = 0; i < kNumChessPieces * 2; ++i) {
+      if (covered_[i] == 0) continue;
+      float v = GetValue(ChessPiece(i)) * covered_[i] / kCoefCovered;
+      (GetChessPieceColor(ChessPiece(i)) == color) ? score += v : score -= v;
+    }
   }
   if (no_flip_capture_count_ >= kNoFlipCaptureCountLimit / 6) score /= 2;
   if (no_flip_capture_count_ >= kNoFlipCaptureCountLimit / 2) score /= 2;

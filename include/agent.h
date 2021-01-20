@@ -14,11 +14,15 @@ class Agent {
   ChessMove best_move_;
   TranspositionTable<20, ChessMove> table_;
   int depth_limit_, num_flip_;
+  std::chrono::time_point<std::chrono::system_clock> search_start_;
+  int64_t search_counter_;
+  bool search_cut_;
 
   static constexpr float kInf = 1E9;
   static constexpr int kDepthLimit = 15;
   static constexpr float kRange = 5;
   static constexpr int kTimeThreshold = 100;
+  static constexpr int kTimeLimit = 200 * 1'000;
 
   float NegaScout(float alpha, float beta, int depth, ChessColor color,
                   bool save_move, BoardUpdater &updater);

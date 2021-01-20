@@ -42,11 +42,23 @@ float Agent::ChanceNodeSearch(float alpha, float beta, int depth,
 
 float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
                        bool save_move, BoardUpdater &updater) {
+  if (search_cut_) return -kInf;
   if (depth == 0) return board_.Evaluate(color);
   if (board_.Terminate()) {
     ChessColor winner = board_.GetWinner();
     if (winner == DRAW) return 0;
-    return (winner == color ? 2000 : -2000) * (depth + 1);
+    return (winner == color ? 10000 : -10000) * (depth + 1);
+  }
+  if (((++search_counter_) & 16777215) == 0) {
+    auto now = std::chrono::system_clock::now();
+    int elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      now - search_start_)
+                      .count();
+    const int kTL = std::min(kTimeLimit, static_cast<int>(time_left_) >> 4);
+    if (elapsed > kTL) {
+      search_cut_ = true;
+      return -kInf;
+    }
   }
   float score = -kInf;  // fail soft
   const uint128_t hv = board_.GetHashValue();
@@ -82,7 +94,7 @@ float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
   auto moves = board_.ListMoves(color);
 
   if (moves.empty() && board_.GetCoveredSquares() == 0) {
-    return -2000 * (depth + 1);
+    return -10000 * (depth + 1);
   }
 
   float upper_bound = beta;
@@ -129,7 +141,10 @@ float Agent::NegaScout(float alpha, float beta, int depth, ChessColor color,
 std::pair<float, int> Agent::SearchSingleDepth(float alpha, float beta,
                                                int depth,
                                                BoardUpdater &updater) {
-  auto time_start = std::chrono::system_clock::now();
+  search_cut_ = false;
+  search_counter_ = 0;
+  search_start_ = std::chrono::system_clock::now();
+  auto saved_best_move = best_move_;
   best_move_ = Flip(255, NO_PIECE);
   float score = NegaScout(alpha, beta, depth, color_, true, updater);
   if (score <= alpha) {
@@ -139,10 +154,10 @@ std::pair<float, int> Agent::SearchSingleDepth(float alpha, float beta,
     best_move_ = Flip(255, NO_PIECE);
     score = NegaScout(score, kInf, depth, color_, true, updater);
   }
-  auto time_end = std::chrono::system_clock::now();
   int time_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                         time_end - time_start)
+                         std::chrono::system_clock::now() - search_start_)
                          .count();
+  if (search_cut_) best_move_ = saved_best_move;
   return std::make_pair(score, time_elapsed);
 }
 
