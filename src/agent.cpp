@@ -16,9 +16,8 @@ void Agent::MakeMove(uint8_t src, uint8_t dst) {
 }
 
 void Agent::MakeFlip(uint8_t pos, ChessPiece result) {
-  if (++num_flip_ == 8) {
-    if (depth_limit_ < kDepthSoftLimit) depth_limit_++;
-    num_flip_ = 0;
+  if (((++num_flip_) & 7) == 0) {
+    depth_limit_ = std::max(depth_limit_, 3 + (num_flip_ >> 3));
   }
   board_.MakeMove(Flip(pos, result));
 }
@@ -146,29 +145,25 @@ ChessMove Agent::GenerateMove() {
                               time_end - time_start)
                               .count();
   }
-  if (depth_limit_ == kDepthSoftLimit) {
-    int depth_lim = depth_limit_;
-    while (depth_lim < kDepthHardLimit &&
-           last_search_elapsed <= kTimeThreshold) {
-      depth_lim++;
-      std::cerr << "keep searching depth = " << depth_lim << "\n";
-      float alpha = score - kRange, beta = score + kRange;
-      auto time_start = std::chrono::system_clock::now();
+  int depth_lim = depth_limit_;
+  while (depth_lim < kDepthLimit && last_search_elapsed <= kTimeThreshold) {
+    depth_lim++;
+    std::cerr << "keep searching depth = " << depth_lim << "\n";
+    float alpha = score - kRange, beta = score + kRange;
+    auto time_start = std::chrono::system_clock::now();
+    best_move_ = Flip(255, NO_PIECE);
+    score = NegaScout(alpha, beta, depth_lim, color_, true, updater);
+    if (score <= alpha) {
       best_move_ = Flip(255, NO_PIECE);
-      score = NegaScout(alpha, beta, depth_lim, color_, true, updater);
-      if (score <= alpha) {
-        best_move_ = Flip(255, NO_PIECE);
-        score = NegaScout(-kInf, score, depth_lim, color_, true, updater);
-      } else if (score >= beta) {
-        best_move_ = Flip(255, NO_PIECE);
-        score = NegaScout(score, kInf, depth_lim, color_, true, updater);
-      }
-      auto time_end = std::chrono::system_clock::now();
-      last_search_elapsed =
-          std::chrono::duration_cast<std::chrono::milliseconds>(time_end -
-                                                                time_start)
-              .count();
+      score = NegaScout(-kInf, score, depth_lim, color_, true, updater);
+    } else if (score >= beta) {
+      best_move_ = Flip(255, NO_PIECE);
+      score = NegaScout(score, kInf, depth_lim, color_, true, updater);
     }
+    auto time_end = std::chrono::system_clock::now();
+    last_search_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              time_end - time_start)
+                              .count();
   }
   std::cerr << "NegaScout score = " << score << "\n";
   std::cerr << "board: "

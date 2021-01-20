@@ -163,6 +163,15 @@ std::vector<ChessMove> ChessBoard::ListMoves(ChessColor player) {
     }
     mask ^= (1U << p);
   }
+  // Move ordering.
+  std::sort(moves.begin(), moves.end(),
+            [&](const ChessMove &v1, const ChessMove &v2) {
+              const auto &x = std::get<Move>(v1);
+              const auto &y = std::get<Move>(v2);
+              if (board_[x.dst] == NO_PIECE) return false;
+              if (board_[y.dst] == NO_PIECE) return true;
+              return board_[x.dst] > board_[y.dst];
+            });
   return moves;
 }
 
@@ -247,17 +256,31 @@ float ChessBoard::Evaluate(ChessColor color) const {
   static constexpr float kCoefDangerous = 3;
   float score = 0;
   uint32_t under_attack = MarkUnderAttack();
+  bool general_revealed[2] = {false, false};
+  for (size_t i = 0; i < kNumSquares; ++i) {
+    if (board_[i] == RED_GENERAL) general_revealed[RED] = true;
+    if (board_[i] == BLACK_GENERAL) general_revealed[BLACK] = true;
+  }
+
+  auto GetValue = [&](ChessPiece piece) -> float {
+    ChessPiece type = GetChessPieceType(piece);
+    if (general_revealed[GetChessPieceColor(piece) ^ 1]) {
+      if (type == SOLDIER) return 20;
+      if (type == CANNON) return 250;
+    }
+    return kValue[type];
+  };
+
   for (size_t i = 0; i < kNumSquares; ++i) {
     if (board_[i] == NO_PIECE || board_[i] == COVERED_PIECE) continue;
-    float v = kValue[GetChessPieceType(board_[i])];
+    float v = GetValue(board_[i]);
     if (under_attack >> i & 1) v /= kCoefDangerous;
     (GetChessPieceColor(board_[i]) == color) ? score += v : score -= v;
   }
   static constexpr float kCoefCovered = 5;
   for (uint8_t i = 0; i < kNumChessPieces * 2; ++i) {
     if (covered_[i] == 0) continue;
-    float v =
-        kValue[GetChessPieceType(ChessPiece(i))] * covered_[i] / kCoefCovered;
+    float v = GetValue(ChessPiece(i)) * covered_[i] / kCoefCovered;
     (GetChessPieceColor(ChessPiece(i)) == color) ? score += v : score -= v;
   }
   if (no_flip_capture_count_ >= kNoFlipCaptureCountLimit / 2) score /= 2;
